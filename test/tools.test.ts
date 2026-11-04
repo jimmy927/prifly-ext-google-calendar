@@ -1,5 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test";
-import { FOOTBALL, SCHOOL } from "./fake-calendar";
+import { FOOTBALL, PRIMARY, SCHOOL } from "./fake-calendar";
 import { world } from "./world";
 
 let stop: (() => void) | undefined;
@@ -150,6 +150,30 @@ test("calendar_agenda groups every calendar's week by day, each line led by its 
       ].join("\n"),
     ].join("\n\n"),
   );
+});
+
+test("calendar_agenda shows a timed event that began before the range, and one that spans days", async () => {
+  const w = started();
+  w.calendar.events.get(PRIMARY)?.push(
+    {
+      id: "night1",
+      summary: "Nattpass",
+      start: { dateTime: "2026-11-08T20:00:00+01:00" },
+      end: { dateTime: "2026-11-09T02:00:00+01:00" },
+    },
+    {
+      id: "trip1",
+      summary: "Resa",
+      start: { dateTime: "2026-11-12T09:00:00+01:00" },
+      end: { dateTime: "2026-11-14T00:00:00+01:00" },
+    },
+  );
+  const answer = await w.call("calendar_agenda", { calendars: ["Jimmy"], ...WEEK });
+  expect(answer).toContain("## Mon 9 Nov\n- [Jimmy] until 02:00 Nattpass — id: night1");
+  expect(answer).not.toContain("## Sun 8 Nov");
+  expect(answer).toContain("## Thu 12 Nov\n- [Jimmy] 09:00 Resa — id: trip1");
+  expect(answer).toContain("## Fri 13 Nov\n- [Jimmy] all day Resa — id: trip1");
+  expect(answer).not.toContain("## Sat 14 Nov");
 });
 
 test("calendar_agenda takes chosen calendars by id or name, and names what matched nothing", async () => {

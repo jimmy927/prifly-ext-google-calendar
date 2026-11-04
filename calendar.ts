@@ -89,7 +89,9 @@ export function calendarClient(options: CalendarClientOptions): CalendarClient {
       // A Request carries its method and body, whatever `fetch` does with its options.
       const answer = await connections.fetch(connection, new Request(url, init));
       if ("needsSignIn" in answer) return { ok: false, kind: "sign-in", account };
-      if (RETRY_STATUSES.includes(answer.status) && attempt === 0) {
+      // Only a read is sent again: a write that Google applied before answering 503 must not repeat.
+      const isRead = (init?.method ?? "GET") === "GET";
+      if (RETRY_STATUSES.includes(answer.status) && attempt === 0 && isRead) {
         await answer.text();
         await sleep(retryWait(answer) * 1000);
         continue;
@@ -104,8 +106,12 @@ export function calendarClient(options: CalendarClientOptions): CalendarClient {
     const sent = await send(`${CALENDAR_API}${path}`);
     if (!sent.ok) return sent;
     const text = await sent.value.text();
-    const value: unknown = text === "" ? {} : JSON.parse(text);
-    return { ok: true, value: isRecord(value) ? value : {} };
+    try {
+      const value: unknown = text === "" ? {} : JSON.parse(text);
+      return { ok: true, value: isRecord(value) ? value : {} };
+    } catch {
+      return { ok: false, kind: "http", account, status: sent.value.status, body: text };
+    }
   }
 
   /** Every page of a list call, up to `maxPages`; `read` takes the page's items out of its answer. */

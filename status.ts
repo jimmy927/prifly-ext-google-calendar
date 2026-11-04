@@ -37,7 +37,8 @@ export async function statusText(api: ExtensionApi): Promise<string> {
     if (!calendars.ok) {
       return `Connected as ${connection.account}, but Google Calendar answered ${calendars.status}.`;
     }
-    return `Connected as ${connection.account} · ${calendars.value.length} calendars`;
+    const count = calendars.value.length;
+    return `Connected as ${connection.account} · ${count} ${count === 1 ? "calendar" : "calendars"}`;
   } catch (error) {
     return `Connected as ${connection.account}, but Google Calendar could not be reached: ${error instanceof Error ? error.message : String(error)}`;
   }

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ExtensionModule } from "@prifly/extension-api";
 import * as extension from "../index";
 import manifest from "../prifly-extension.json";
-import { world } from "./world";
+import { FIRST_ACCOUNT, SECOND_ACCOUNT, world } from "./world";
 
 // The module is what prifly imports: it must fit the contract as a whole.
 const module: ExtensionModule = extension;
@@ -64,7 +64,23 @@ test("stopping makes the tools answer that no account is connected", async () =>
   expect(await w.call("calendar_list", {})).toContain("No Google account is connected");
 });
 
-test("the account setting picks the account, and an unknown one is not used", async () => {
+test("the account setting picks the account when no account argument is given", async () => {
+  const w = world({
+    accounts: [FIRST_ACCOUNT, SECOND_ACCOUNT],
+    settings: { account: "second@example.com" },
+  });
+  stop = w.stop;
+  expect(await w.call("calendar_list", {})).toContain("Jimmy");
+  const tokens = w.connections.requests.map((each) => each.headers.get("Authorization"));
+  expect(tokens.length).toBeGreaterThan(0);
+  expect(tokens.every((each) => each?.startsWith("Bearer token-g-2-"))).toBe(true);
+  await w.call("calendar_list", { account: FIRST_ACCOUNT.account });
+  expect(w.connections.requests.at(-1)?.headers.get("Authorization")).toStartWith(
+    "Bearer token-g-1-",
+  );
+});
+
+test("an account argument picks that account, and an unknown one is not used", async () => {
   const second = { id: "g-2", provider: "google", account: "second@example.com", scopes: [] };
   const w = world({ accounts: [{ ...second, scopes: manifest.connections[0]?.scopes ?? [] }] });
   stop = w.stop;

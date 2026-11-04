@@ -53,20 +53,37 @@ export function eventLine(event: CalendarEvent): string {
 /** An event with the calendar it is in, for the agenda. */
 export type AgendaEntry = { calendar: string; event: CalendarEvent };
 
-/** The days of the range an event shows on: every day of an all-day one, else its first. */
+/** The last day an event covers: an all-day one's last day, a timed one's end day (not a midnight end). */
+function lastDayOf(event: CalendarEvent): string {
+  if (event.allDay) return lastDay(event);
+  const first = datePart(event.start);
+  const end = datePart(event.end);
+  if (end <= first) return first;
+  return clockPart(event.end) === "00:00" ? addDays(end, -1) : end;
+}
+
+/** The days of the range an event shows on: every day it covers, so one begun before the range too. */
 function daysOf(event: CalendarEvent, from: string, to: string): string[] {
   const first = datePart(event.start);
-  const last = event.allDay ? lastDay(event) : first;
+  const last = lastDayOf(event);
   const out: string[] = [];
-  for (let day = first; day <= last && out.length < 62; day = addDays(day, 1)) {
-    if (day >= from && day <= to) out.push(day);
+  for (let day = first < from ? from : first; day <= last && day <= to; day = addDays(day, 1)) {
+    out.push(day);
   }
   return out;
 }
 
-/** The sort key within a day: all-day events first, then by the clock, then by calendar. */
-const slot = (entry: AgendaEntry): string =>
-  `${entry.event.allDay ? "" : clockPart(entry.event.start)}|${entry.calendar}`;
+/** What an entry says of its time on `day`: all day, the clock span, or how a longer event ends. */
+function whenOn(event: CalendarEvent, day: string): string {
+  if (event.allDay) return "all day";
+  if (day === datePart(event.start)) return clockSpan(event);
+  const ends = day === lastDayOf(event) && clockPart(event.end) !== "00:00";
+  return ends ? `until ${clockPart(event.end)}` : "all day";
+}
+
+/** The sort key within a day: all-day and continuing events first, then by the clock, then by calendar. */
+const slot = (entry: AgendaEntry, day: string): string =>
+  `${entry.event.allDay || day !== datePart(entry.event.start) ? "" : clockPart(entry.event.start)}|${entry.calendar}`;
 
 /** The agenda: a `## Tue 10 Nov` heading per day that has events, a line for each. */
 export function agendaText(entries: AgendaEntry[], from: string, to: string): string {
@@ -78,11 +95,8 @@ export function agendaText(entries: AgendaEntry[], from: string, to: string): st
   const blocks: string[] = [];
   for (const day of [...byDay.keys()].sort()) {
     const lines = (byDay.get(day) ?? [])
-      .sort((a, b) => slot(a).localeCompare(slot(b)))
-      .map((entry) => {
-        const when = entry.event.allDay ? "all day" : clockSpan(entry.event);
-        return `- [${entry.calendar}] ${when} ${detail(entry.event)}`;
-      });
+      .sort((a, b) => slot(a, day).localeCompare(slot(b, day)))
+      .map((entry) => `- [${entry.calendar}] ${whenOn(entry.event, day)} ${detail(entry.event)}`);
     blocks.push([`## ${dayLabel(day)}`, ...lines].join("\n"));
   }
   return blocks.join("\n\n");
