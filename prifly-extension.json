@@ -1,0 +1,27 @@
+{
+  "id": "google-calendar",
+  "name": "Google Calendar",
+  "description": "List your calendars, read their events and see the family's week from any session, through your Google account. Every change to an event waits for your confirm.",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "prompt": "prompt.md",
+  "connections": [
+    {
+      "provider": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/calendar.events"
+      ],
+      "why": "Reads your calendars and events, and creates, changes and deletes events, each change only after you confirm it on a card."
+    }
+  ],
+  "settings": [
+    {
+      "id": "account",
+      "label": "Google account",
+      "description": "The email of the connected account to use; empty means the first connected Google account.",
+      "type": "string",
+      "default": ""
+    }
+  ]
+}

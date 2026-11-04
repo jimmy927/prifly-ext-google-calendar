@@ -1,0 +1,18 @@
+{
+  "name": "prifly-ext-google-calendar",
+  "private": true,
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "description": "A prifly extension that gives every session Google Calendar tools through your Google connection: list calendars, read events and the family's week, and change events, each change after your confirm.",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@prifly/extension-api": "git+ssh://git@github.com/jimmy927/prifly-extension-api.git#v0.8.0",
+    "@types/bun": "^1.1.14",
+    "typescript": "^7.0.2"
+  }
+}
