@@ -36,6 +36,8 @@ export function parseCalendar(value: unknown): CalendarInfo {
 
 export type CalendarEvent = {
   id: string;
+  /** The iCalendar UID the copies of one event in several calendars share; "" when Google gave none. */
+  uid: string;
   title: string;
   location: string;
   /** The start: `2026-11-10T17:50:00+01:00`, or just `2026-11-10` for an all-day event. */
@@ -66,6 +68,7 @@ export function parseEvent(value: unknown): CalendarEvent | null {
   });
   return {
     id: str(each["id"]),
+    uid: str(each["iCalUID"]),
     title: str(each["summary"]) || "(no title)",
     location: str(each["location"]),
     start: start.time,

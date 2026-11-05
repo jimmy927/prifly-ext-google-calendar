@@ -176,6 +176,40 @@ test("calendar_agenda shows a timed event that began before the range, and one t
   expect(answer).not.toContain("## Sat 14 Nov");
 });
 
+test("calendar_agenda shows an event that sits in two calendars once, with both names", async () => {
+  const w = started();
+  const copy = {
+    id: "spiro1",
+    iCalUID: "spiro1@google.com",
+    summary: "Spirometri",
+    start: { dateTime: "2026-11-12T13:00:00+01:00" },
+    end: { dateTime: "2026-11-12T13:45:00+01:00" },
+  };
+  w.calendar.events.get(FOOTBALL)?.push({ ...copy });
+  w.calendar.events.get(PRIMARY)?.push({ ...copy });
+  const answer = await w.call("calendar_agenda", WEEK);
+  expect(answer).toContain("- [Jimmy, Fotboll P12] 13:00–13:45 Spirometri — id: spiro1");
+  expect(answer.match(/Spirometri/g)?.length).toBe(1);
+});
+
+test("calendar_agenda keeps different events with the same title and time apart", async () => {
+  const w = started();
+  const at = {
+    start: { dateTime: "2026-11-12T13:00:00+01:00" },
+    end: { dateTime: "2026-11-12T13:45:00+01:00" },
+  };
+  w.calendar.events
+    .get(FOOTBALL)
+    ?.push({ id: "a1", iCalUID: "a1@google.com", summary: "Möte", ...at });
+  w.calendar.events
+    .get(PRIMARY)
+    ?.push({ id: "b1", iCalUID: "b1@google.com", summary: "Möte", ...at });
+  const answer = await w.call("calendar_agenda", WEEK);
+  expect(answer).toContain("- [Jimmy] 13:00–13:45 Möte — id: b1");
+  expect(answer).toContain("- [Fotboll P12] 13:00–13:45 Möte — id: a1");
+  expect(answer.match(/Möte/g)?.length).toBe(2);
+});
+
 test("calendar_agenda takes chosen calendars by id or name, and names what matched nothing", async () => {
   const w = started();
   const answer = await w.call("calendar_agenda", {

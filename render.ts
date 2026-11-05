@@ -1,7 +1,7 @@
 /**
  * Events as Markdown a session reads: one line per event for a single
  * calendar, and the agenda across calendars grouped by day with each line
- * prefixed by its calendar's name.
+ * prefixed by its calendar's name (an event in several calendars once, with all their names).
  */
 
 import type { CalendarEvent } from "./calendar-types";
@@ -81,9 +81,27 @@ function whenOn(event: CalendarEvent, day: string): string {
   return ends ? `until ${clockPart(event.end)}` : "all day";
 }
 
+/** An event on one day with every calendar it is in, in the agenda's calendar order. */
+type DayEntry = { calendars: string[]; event: CalendarEvent };
+
+/** What makes entries one event: its iCalUID (else its id) and its start, so a series' instances stay apart. */
+const sameEvent = (event: CalendarEvent): string => `${event.uid || event.id}|${event.start}`;
+
+/** The entries of one day with an event that is in several calendars merged into one. */
+function mergeCopies(entries: AgendaEntry[]): DayEntry[] {
+  const merged = new Map<string, DayEntry>();
+  for (const entry of entries) {
+    const key = sameEvent(entry.event);
+    const have = merged.get(key);
+    if (have === undefined) merged.set(key, { calendars: [entry.calendar], event: entry.event });
+    else if (!have.calendars.includes(entry.calendar)) have.calendars.push(entry.calendar);
+  }
+  return [...merged.values()];
+}
+
 /** The sort key within a day: all-day and continuing events first, then by the clock, then by calendar. */
-const slot = (entry: AgendaEntry, day: string): string =>
-  `${entry.event.allDay || day !== datePart(entry.event.start) ? "" : clockPart(entry.event.start)}|${entry.calendar}`;
+const slot = (entry: DayEntry, day: string): string =>
+  `${entry.event.allDay || day !== datePart(entry.event.start) ? "" : clockPart(entry.event.start)}|${entry.calendars[0]}`;
 
 /** The agenda: a `## Tue 10 Nov` heading per day that has events, a line for each. */
 export function agendaText(entries: AgendaEntry[], from: string, to: string): string {
@@ -94,9 +112,12 @@ export function agendaText(entries: AgendaEntry[], from: string, to: string): st
   }
   const blocks: string[] = [];
   for (const day of [...byDay.keys()].sort()) {
-    const lines = (byDay.get(day) ?? [])
+    const lines = mergeCopies(byDay.get(day) ?? [])
       .sort((a, b) => slot(a, day).localeCompare(slot(b, day)))
-      .map((entry) => `- [${entry.calendar}] ${whenOn(entry.event, day)} ${detail(entry.event)}`);
+      .map(
+        (entry) =>
+          `- [${entry.calendars.join(", ")}] ${whenOn(entry.event, day)} ${detail(entry.event)}`,
+      );
     blocks.push([`## ${dayLabel(day)}`, ...lines].join("\n"));
   }
   return blocks.join("\n\n");
