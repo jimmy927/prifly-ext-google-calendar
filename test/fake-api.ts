@@ -197,8 +197,8 @@ export function fakeApi(
     chooseMail?: FakeChooseMail;
     /** Answers `api.chooseMailEdit`, and `features` then has "choose-mail-edit". */
     chooseMailEdit?: FakeChooseMailEdit;
-    /** Answers `api.confirmEdit`, and `features` then has "confirm-edit"; the text it returns is the reader's edit, null a Cancel. */
-    confirmEdit?: (spec: ConfirmSpec & { content: string }) => Promise<string | null>;
+    /** `features` has "confirm-events" (prifly draws a spec's `events` as an agenda). */
+    confirmEvents?: boolean;
   } = {},
 ): FakeApi {
   let tools: ExtensionTool[] = [];
@@ -253,11 +253,8 @@ export function fakeApi(
       chooseMailEdit: options.chooseMailEdit,
     });
   }
-  if (options.confirmEdit !== undefined) {
-    Object.assign(api, {
-      features: [...(api.features ?? []), "confirm-edit"],
-      confirmEdit: options.confirmEdit,
-    });
+  if (options.confirmEvents === true) {
+    Object.assign(api, { features: [...(api.features ?? []), "confirm-events"] });
   }
   const callTool: FakeApi["callTool"] = (name, args, pick = null) => {
     const tool = tools.find((each) => each.name === name);

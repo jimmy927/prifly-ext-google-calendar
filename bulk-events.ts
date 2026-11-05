@@ -1,24 +1,12 @@
 /**
  * The events of a bulk add (`calendar_create_events`): checking the list a
- * session sent, the request body Google gets for each, how a row reads on the
- * confirm card, and the one-line-per-event text the reader edits there.
+ * session sent, the request body Google gets for each, and how a row reads in
+ * the answer.
  *
  * Every row is checked and every wrong one is named, by its 1-based number,
  * before any card is shown. An all-day event is given with its first `date` and
  * the inclusive last day `end_date` (the day the reader means); Google's own
  * end is the day after, which `eventBody` adds.
- *
- * The editable text has one event per line, fields separated by `|`:
- *
- *     2026-11-10 17:50-19:15 | Padel | where: Bromma Padel | repeat: RRULE:FREQ=WEEKLY;BYDAY=TU
- *     2026-11-21 all day | Cup
- *     2026-11-21..2026-11-23 all day | Weekend away | note: Pack the bags
- *     2026-11-10T22:00 -> 2026-11-11T01:00 | Late shift | zone: Europe/Stockholm
- *
- * The time comes first, the title second; then, in any order, `where:`,
- * `note:`, `repeat:` (once for each recurrence line) and `zone:`. A `|` or a
- * backslash in a text is written `\|` and `\\`, a line break `\n`; lines that
- * are empty or start with `#` are ignored.
  */
 
 import { isRecord, list } from "./calendar-types";
@@ -174,7 +162,7 @@ function commonOf(raw: Record<string, unknown>): Common | string[] {
 }
 
 /** One row a session sent: the event, or everything wrong with the row. */
-export function checkRow(raw: unknown): NewEvent | string[] {
+function checkRow(raw: unknown): NewEvent | string[] {
   if (!isRecord(raw)) return ["is not an object with a summary and a time"];
   const unknown = Object.keys(raw)
     .filter((key) => !ROW_KEYS.includes(key))
@@ -192,7 +180,7 @@ export function checkRow(raw: unknown): NewEvent | string[] {
 }
 
 /** The rows' events, or the problems of the list and of each row ("row 3: …"). */
-export function collectRows(rows: (NewEvent | string[])[]): Checked {
+function collectRows(rows: (NewEvent | string[])[]): Checked {
   const errors: string[] = [];
   if (rows.length === 0) errors.push(`the list is empty: give 1 to ${MAX_EVENTS} events`);
   if (rows.length > MAX_EVENTS) {
@@ -240,127 +228,10 @@ export function eventBody(event: NewEvent, zone: string): Record<string, unknown
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
 
-/** A row on the plain card: "Tue 10 Nov 17:50–19:15 — Padel (Bromma Padel) — weekly on Sundays". */
+/** A row of the answer:"Tue 10 Nov 17:50–19:15 — Padel (Bromma Padel) — every Sunday". */
 export function rowText(event: NewEvent, zone: string): string {
   const when = whenOf(eventBody(event, zone));
   const place = event.location === "" ? "" : ` (${oneLine(event.location)})`;
   const repeats = recurrenceText(event.recurrence);
   return `${when} — ${oneLine(event.summary)}${place}${repeats === "" ? "" : ` — ${repeats}`}`;
-}
-
-/** The rows as a numbered list. */
-export function numberedRows(events: NewEvent[], zone: string): string[] {
-  return events.map((event, at) => `${at + 1}. ${rowText(event, zone)}`);
-}
-
-const escaped = (text: string): string => text.replace(/[\\|]/g, "\\$&").replace(/\r?\n/g, "\\n");
-
-const unescaped = (text: string): string =>
-  text.replace(/\\([\\|n])/g, (_, char: string) => (char === "n" ? "\n" : char));
-
-const SAME_DAY_CLOCK = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):00$/;
-
-function whenField(event: NewEvent): string {
-  if (event.allDay) {
-    return event.lastDate === event.date
-      ? `${event.date} all day`
-      : `${event.date}..${event.lastDate} all day`;
-  }
-  const from = SAME_DAY_CLOCK.exec(event.start);
-  const to = SAME_DAY_CLOCK.exec(event.end);
-  if (from !== null && to !== null && from[1] === to[1]) return `${from[1]} ${from[2]}-${to[2]}`;
-  return `${event.start} -> ${event.end}`;
-}
-
-/** One event as a line of the editable text. */
-export function editLine(event: NewEvent): string {
-  return [
-    whenField(event),
-    escaped(event.summary),
-    ...(event.location === "" ? [] : [`where: ${escaped(event.location)}`]),
-    ...(event.description === "" ? [] : [`note: ${escaped(event.description)}`]),
-    ...event.recurrence.map((line) => `repeat: ${escaped(line)}`),
-    ...(event.timeZone === "" ? [] : [`zone: ${event.timeZone}`]),
-  ].join(" | ");
-}
-
-const EDIT_HELP =
-  "# One event per line: time | title | where: … | note: … | repeat: RRULE:… | zone: …  (time: 2026-11-10 17:50-19:15, 2026-11-21 all day, 2026-11-21..2026-11-23 all day or 2026-11-10T22:00 -> 2026-11-11T01:00). Delete a line to leave that event out.";
-
-/** The events as the text the reader edits on the card. */
-export function editText(events: NewEvent[]): string {
-  return [EDIT_HELP, ...events.map(editLine)].join("\n");
-}
-
-/** A line split at its `|` fields, a backslash keeping the next character in the field. */
-function splitFields(line: string): string[] {
-  const fields: string[] = [];
-  let field = "";
-  for (let at = 0; at < line.length; at++) {
-    const char = line.charAt(at);
-    if (char === "\\") {
-      field += char + line.charAt(at + 1);
-      at++;
-    } else if (char === "|") {
-      fields.push(field);
-      field = "";
-    } else {
-      field += char;
-    }
-  }
-  return [...fields, field].map((each) => each.trim());
-}
-
-const ALL_DAY_FIELD = /^(\d{4}-\d{2}-\d{2})(?:\s*\.\.\s*(\d{4}-\d{2}-\d{2}))?\s+all day$/i;
-const SAME_DAY_FIELD = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})$/;
-
-/** The row fields a time field stands for, or why it cannot be read. */
-function whenFields(field: string): Record<string, string> | string {
-  const allDay = ALL_DAY_FIELD.exec(field);
-  if (allDay !== null) return { date: allDay[1] ?? "", end_date: allDay[2] ?? allDay[1] ?? "" };
-  const same = SAME_DAY_FIELD.exec(field);
-  if (same !== null) return { start: `${same[1]}T${same[2]}`, end: `${same[1]}T${same[3]}` };
-  const [start, end, ...more] = field.split(/\s*->\s*/);
-  if (start !== undefined && end !== undefined && more.length === 0) return { start, end };
-  return `cannot read the time '${field}' (like 2026-11-10 17:50-19:15, 2026-11-21 all day or 2026-11-10T22:00 -> 2026-11-11T01:00)`;
-}
-
-const OPTION_FIELDS: Record<string, string> = {
-  where: "location",
-  note: "description",
-  zone: "timeZone",
-};
-
-/** The row an edited line stands for, or why the line cannot be read. */
-function parseLine(line: string): Record<string, unknown> | string {
-  const [when = "", title = "", ...options] = splitFields(line).filter(
-    (field, at) => at < 2 || field !== "",
-  );
-  const times = whenFields(when);
-  if (typeof times === "string") return times;
-  const row: Record<string, unknown> = { ...times, summary: unescaped(title) };
-  const repeats: string[] = [];
-  for (const option of options) {
-    const match = /^(where|note|repeat|zone):\s*([\s\S]*)$/.exec(option);
-    if (match === null)
-      return `cannot read '${option}' (after the title: where:, note:, repeat: or zone:)`;
-    const value = unescaped(match[2] ?? "");
-    if (match[1] === "repeat") repeats.push(value);
-    else row[OPTION_FIELDS[match[1] ?? ""] ?? ""] = value;
-  }
-  return repeats.length === 0 ? row : { ...row, recurrence: repeats };
-}
-
-/** The events of an edited text, checked as strictly as the session's list: its problems name the row (the Nth event line). */
-export function parseEditText(text: string): Checked {
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "" && !line.startsWith("#"));
-  return collectRows(
-    lines.map((line) => {
-      const row = parseLine(line);
-      return typeof row === "string" ? [row] : checkRow(row);
-    }),
-  );
 }

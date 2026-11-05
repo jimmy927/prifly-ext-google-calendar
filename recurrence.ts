@@ -1,6 +1,6 @@
 /**
  * A recurrence as the reader would say it. `recurrenceText(["RRULE:FREQ=WEEKLY;BYDAY=SU"])`
- * is "weekly on Sundays"; a rule this does not read (a day of the month, an
+ * is "every Sunday"; a rule this does not read (a day of the month, an
  * ordinal weekday, anything unusual) is shown as written, so the card never
  * says something the rule does not.
  */
@@ -17,14 +17,14 @@ const DAY_NAMES: Record<string, string> = {
   SU: "Sun",
 };
 
-const DAY_PLURALS: Record<string, string> = {
-  MO: "Mondays",
-  TU: "Tuesdays",
-  WE: "Wednesdays",
-  TH: "Thursdays",
-  FR: "Fridays",
-  SA: "Saturdays",
-  SU: "Sundays",
+const DAY_FULL: Record<string, string> = {
+  MO: "Monday",
+  TU: "Tuesday",
+  WE: "Wednesday",
+  TH: "Thursday",
+  FR: "Friday",
+  SA: "Saturday",
+  SU: "Sunday",
 };
 
 /** How each frequency reads on its own, and its unit for "every 2 weeks". */
@@ -74,16 +74,31 @@ function endText(parts: Record<string, string>): string | null {
   return text;
 }
 
-/** The weekdays of a rule as " on Sundays" or " on Mon, Wed"; null when they are not plain weekdays of a weekly rule. */
-function daysText(parts: Record<string, string>, interval: number): string | null {
-  if (parts["BYDAY"] === undefined) return "";
-  const days = parts["BYDAY"].split(",");
-  if (parts["FREQ"] !== "WEEKLY" || days.some((day) => DAY_NAMES[day] === undefined)) return null;
+/** "Mon, Wed and Fri": the short day names of a list, the last joined with "and". */
+function dayList(days: string[]): string {
+  const names = days.map((day) => DAY_NAMES[day] ?? day);
+  const last = names.pop();
+  return names.length === 0 ? (last ?? "") : `${names.join(", ")} and ${last}`;
+}
+
+/** "every other Sunday", "every 3 weeks on Mon, Wed", "Mon, Wed and Fri": a weekly rule with days; null when they are not plain weekdays. */
+function weekdaysText(days: string[], interval: number): string | null {
+  if (days.some((day) => DAY_NAMES[day] === undefined)) return null;
   const [only] = days;
-  if (days.length === 1 && interval === 1 && only !== undefined) {
-    return ` on ${DAY_PLURALS[only]}`;
+  if (days.length === 1 && only !== undefined) {
+    const name = DAY_FULL[only] ?? only;
+    if (interval === 1) return `every ${name}`;
+    return interval === 2 ? `every other ${name}` : `every ${interval} weeks on ${name}`;
   }
-  return ` on ${days.map((day) => DAY_NAMES[day]).join(", ")}`;
+  if (interval === 1) return dayList(days);
+  const short = days.map((day) => DAY_NAMES[day]).join(", ");
+  return interval === 2 ? `every other ${short}` : `every ${interval} weeks on ${short}`;
+}
+
+/** The frequency and interval alone: "weekly", "every other day", "every 3 months". */
+function everyText(frequency: { alone: string; unit: string }, interval: number): string {
+  if (interval === 1) return frequency.alone;
+  return interval === 2 ? `every other ${frequency.unit}` : `every ${interval} ${frequency.unit}s`;
 }
 
 /** One RRULE line in words, or null when any part of it is beyond what this reads. */
@@ -93,11 +108,12 @@ function ruleText(line: string): string | null {
   const frequency = FREQUENCIES[parts["FREQ"] ?? ""];
   const interval = parts["INTERVAL"] === undefined ? 1 : Number(parts["INTERVAL"]);
   if (frequency === undefined || !Number.isInteger(interval) || interval < 1) return null;
-  const days = daysText(parts, interval);
+  const byDay = parts["BYDAY"];
+  if (byDay !== undefined && parts["FREQ"] !== "WEEKLY") return null;
+  const every =
+    byDay === undefined ? everyText(frequency, interval) : weekdaysText(byDay.split(","), interval);
   const end = endText(parts);
-  if (days === null || end === null) return null;
-  const every = interval === 1 ? frequency.alone : `every ${interval} ${frequency.unit}s`;
-  return `${every}${days}${end}`;
+  return every === null || end === null ? null : `${every}${end}`;
 }
 
 /** An EXDATE line as "except 24 Dec, 25 Dec"; null when a date in it is not a plain date. */
@@ -114,7 +130,7 @@ function lineText(line: string): string {
   return line;
 }
 
-/** The recurrence lines of an event in words, "" for none: "weekly on Sundays, until 20 Dec". */
+/** The recurrence lines of an event in words, "" for none: "every Sunday, until 20 Dec". */
 export function recurrenceText(lines: string[]): string {
   return lines.map(lineText).join(", ");
 }

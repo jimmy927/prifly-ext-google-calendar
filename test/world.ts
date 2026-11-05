@@ -33,11 +33,8 @@ export function world(
     settings?: SettingValues;
     /** What the reader answers on every confirm card (default: Confirm). */
     confirm?: boolean;
-    /**
-     * Gives the fake prifly the editable confirm card: what the reader leaves in
-     * the text, from the text shown; null cancels. Left out, a prifly without it.
-     */
-    edit?: (shown: string) => string | null;
+    /** Gives the fake prifly the "confirm-events" feature (the agenda card). */
+    events?: boolean;
   } = {},
 ) {
   const calendar: FakeCalendar = fakeCalendar();
@@ -55,14 +52,7 @@ export function world(
       confirms.push({ spec, writesBefore: writes().length });
       return options.confirm ?? true;
     },
-    ...(options.edit === undefined
-      ? {}
-      : {
-          confirmEdit: async (spec: ConfirmSpec & { content: string }) => {
-            confirms.push({ spec, writesBefore: writes().length });
-            return options.edit?.(spec.content) ?? null;
-          },
-        }),
+    ...(options.events === true ? { confirmEvents: true } : {}),
   });
   const stop = activate(fake.api);
 

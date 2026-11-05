@@ -95,6 +95,8 @@ export type EventDetail = {
   event: CalendarEvent;
   /** `master` for a series' own id (deleting it deletes the whole series), `occurrence` for one date of it. */
   series: "" | "master" | "occurrence";
+  /** The series' RRULE/EXDATE lines; empty unless `series` is `master`. */
+  recurrence: string[];
 };
 
 /** An event with its series, or null for one that was cancelled (already deleted). */
@@ -102,6 +104,11 @@ export function parseEventDetail(value: unknown): EventDetail | null {
   const event = parseEvent(value);
   if (event === null) return null;
   const each = isRecord(value) ? value : {};
-  if (list(each["recurrence"]).length > 0) return { event, series: "master" };
-  return { event, series: str(each["recurringEventId"]) === "" ? "" : "occurrence" };
+  const recurrence = list(each["recurrence"]).filter((line) => typeof line === "string");
+  if (recurrence.length > 0) return { event, series: "master", recurrence };
+  return {
+    event,
+    series: str(each["recurringEventId"]) === "" ? "" : "occurrence",
+    recurrence: [],
+  };
 }

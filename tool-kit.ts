@@ -5,6 +5,7 @@
  */
 
 import type { ConfirmSpec, ExtensionApi } from "@prifly/extension-api";
+import type { ConfirmEvents } from "./bulk-agenda";
 import { type CalendarClient, calendarClient } from "./calendar";
 import { NO_CONNECTION, pickConnection } from "./connection";
 
@@ -71,32 +72,16 @@ export async function withCalendar(
 /**
  * Shows the confirm card for a write. Null when the reader confirmed, so the
  * write goes ahead; otherwise the text the tool answers instead of writing.
+ * With `events`, a prifly that has the agenda card ("confirm-events") draws
+ * them in place of `spec.content`; any other prifly shows `spec` as it is.
  */
-export async function confirmFirst(api: ExtensionApi, spec: ConfirmSpec): Promise<string | null> {
-  if (api.confirm === undefined) return NO_CONFIRM;
-  return (await api.confirm(spec)) ? null : CANCELLED;
-}
-
-/** prifly's editable confirm card ("confirm-edit"): `content` as editable text; null is Cancel. */
-type ConfirmEdit = (spec: ConfirmSpec & { content: string }) => Promise<string | null>;
-
-/**
- * Shows the confirm card for a write whose list the reader may change. Where
- * prifly has the editable card ("confirm-edit"), `editable` is drawn as the
- * editable text in place of `spec.content` and the answer's text is what the
- * reader left in it. Otherwise the plain card is shown with `spec` as it is
- * and the answer's text is null. A string answer is what the tool answers
- * instead of writing (cancelled, or no card at all).
- */
-export async function confirmEditable(
+export async function confirmFirst(
   api: ExtensionApi,
   spec: ConfirmSpec,
-  editable: string,
-): Promise<{ text: string | null } | string> {
-  const edit = (api as ExtensionApi & { confirmEdit?: ConfirmEdit }).confirmEdit;
-  if (api.features?.includes("confirm-edit") && edit !== undefined) {
-    const text = await edit.call(api, { ...spec, content: editable });
-    return text === null ? CANCELLED : { text };
-  }
-  return (await confirmFirst(api, spec)) ?? { text: null };
+  events?: ConfirmEvents,
+): Promise<string | null> {
+  if (api.confirm === undefined) return NO_CONFIRM;
+  const shown: ConfirmSpec & { events?: ConfirmEvents } =
+    events !== undefined && api.features?.includes("confirm-events") ? { ...spec, events } : spec;
+  return (await api.confirm(shown)) ? null : CANCELLED;
 }

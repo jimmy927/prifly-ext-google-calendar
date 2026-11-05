@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from "bun:test";
-import { checkEvents, editText, parseEditText } from "../bulk-events";
 import { recurrenceText } from "../recurrence";
 import { CANCELLED, NO_CONFIRM } from "../tool-kit";
 import { FOOTBALL, PRIMARY, SCHOOL } from "./fake-calendar";
@@ -80,20 +79,26 @@ test("an unknown or read-only calendar, an empty list and too many events are re
 
 // ---- the card ----
 
-test("one card says it in words first, lists timed, all-day and recurring rows, and shows the requests", async () => {
+test("one card says it in words first, shows an agenda grouped by day, and shows the requests", async () => {
   const w = started();
   await create(w, THREE);
   expect(w.confirms.length).toBe(1);
   expect(w.confirms[0]?.writesBefore).toBe(0);
   const spec = w.confirms[0]?.spec;
-  expect(spec?.summary).toBe("Add 3 events to the calendar 'Jimmy'");
+  expect(spec?.summary).toBe("Add 3 events to your calendar 'Jimmy'");
   expect(spec?.content).toBe(
     [
-      "1. Tue 10 Nov 17:50–19:15 — Padel (Bromma Padel) — weekly on Sundays",
-      "2. Sat 21 Nov – Sun 22 Nov all day — Cup",
-      "3. Mon 23 Nov all day — Lunch",
+      "Tue 10 Nov",
+      "    17:50–19:15   Padel, Bromma Padel · repeats every Sunday",
+      "",
+      "Sat 21 – Sun 22 Nov",
+      "    All day       Cup",
+      "",
+      "Mon 23 Nov",
+      "    All day       Lunch",
     ].join("\n"),
   );
+  expect(spec).not.toHaveProperty("events");
   expect(spec?.details).toContain(
     `POST https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(PRIMARY)}/events`,
   );
@@ -107,31 +112,90 @@ test("a calendar can be named by id, by a part of its name, or primary", async (
   await create(w, [LUNCH], FOOTBALL);
   await create(w, [LUNCH], "primary");
   expect(w.confirms.map((each) => each.spec.summary)).toEqual([
-    "Add 1 event to the calendar 'Fotboll P12'",
-    "Add 1 event to the calendar 'Fotboll P12'",
-    "Add 1 event to the calendar 'Jimmy'",
+    "Add 1 event to your calendar 'Fotboll P12'",
+    "Add 1 event to your calendar 'Fotboll P12'",
+    "Add 1 event to your calendar 'Jimmy'",
   ]);
 });
 
 test("a recurrence reads in plain words, and anything else stays as written", () => {
   const words = (...lines: string[]) => recurrenceText(lines);
-  expect(words("RRULE:FREQ=WEEKLY;BYDAY=SU")).toBe("weekly on Sundays");
+  expect(words("RRULE:FREQ=WEEKLY;BYDAY=SU")).toBe("every Sunday");
+  expect(words("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SU")).toBe("every other Sunday");
+  expect(words("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE")).toBe("every other Mon, Wed");
+  expect(words("RRULE:FREQ=WEEKLY;INTERVAL=3;BYDAY=TU")).toBe("every 3 weeks on Tuesday");
+  expect(words("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR")).toBe("Mon, Wed and Fri");
+  expect(words("RRULE:FREQ=WEEKLY;BYDAY=MO,WE")).toBe("Mon and Wed");
+  expect(words("RRULE:FREQ=WEEKLY")).toBe("weekly");
   expect(words("RRULE:FREQ=DAILY")).toBe("daily");
-  expect(words("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE")).toBe("every 2 weeks on Mon, Wed");
-  expect(words("RRULE:FREQ=WEEKLY;BYDAY=MO,WE")).toBe("weekly on Mon, Wed");
+  expect(words("RRULE:FREQ=DAILY;INTERVAL=2")).toBe("every other day");
   expect(words("RRULE:FREQ=MONTHLY")).toBe("monthly");
-  expect(words("RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261220")).toBe(
-    "weekly on Sundays, until 20 Dec",
-  );
+  expect(words("RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261220")).toBe("every Sunday, until 20 Dec");
   expect(words("RRULE:FREQ=DAILY;UNTIL=20261220T000000Z")).toBe("daily, until 20 Dec");
-  expect(words("RRULE:FREQ=DAILY;COUNT=10")).toBe("daily, 10 times");
+  expect(words("RRULE:FREQ=DAILY;COUNT=6")).toBe("daily, 6 times");
   expect(words("RRULE:FREQ=WEEKLY;BYDAY=SU", "EXDATE;VALUE=DATE:20261129,20261206")).toBe(
-    "weekly on Sundays, except 29 Nov, 6 Dec",
+    "every Sunday, except 29 Nov, 6 Dec",
   );
   expect(words("RRULE:FREQ=MONTHLY;BYMONTHDAY=13")).toBe("RRULE:FREQ=MONTHLY;BYMONTHDAY=13");
   expect(words("RRULE:FREQ=MONTHLY;BYDAY=1MO")).toBe("RRULE:FREQ=MONTHLY;BYDAY=1MO");
+  expect(words("RRULE:FREQ=WEEKLY;BYDAY=XX")).toBe("RRULE:FREQ=WEEKLY;BYDAY=XX");
   expect(words("RRULE:FREQ=DAILY;UNTIL=soon")).toBe("RRULE:FREQ=DAILY;UNTIL=soon");
   expect(words("RDATE:20261101")).toBe("RDATE:20261101");
+});
+
+test("the agenda groups several events on one day, sorts by start and writes a multi-day event over two months", async () => {
+  const w = started();
+  await create(w, [
+    {
+      summary: "Late",
+      start: "2026-11-08T20:00",
+      end: "2026-11-08T21:00",
+      location: "  Hall\n 2 ",
+    },
+    { summary: "Early", start: "2026-11-08T07:30", end: "2026-11-08T08:00" },
+    { summary: "Trip", date: "2026-11-30", end_date: "2026-12-02" },
+    { summary: "Night", start: "2026-11-08T22:00", end: "2026-11-09T01:00" },
+    { summary: "Fika", date: "2026-11-08" },
+  ]);
+  expect(w.confirms[0]?.spec.content).toBe(
+    [
+      "Sun 8 Nov",
+      "    All day                   Fika",
+      "    07:30–08:00               Early",
+      "    20:00–21:00               Late, Hall 2",
+      "    22:00 – Mon 9 Nov 01:00   Night",
+      "",
+      "Mon 30 Nov – Wed 2 Dec",
+      "    All day                   Trip",
+    ].join("\n"),
+  );
+});
+
+test("a prifly with the agenda card also gets the events, with the exact shape, and none without it", async () => {
+  const w = started({ events: true });
+  await create(w, [
+    PADEL,
+    { summary: "Football cup", date: "2026-11-21", end_date: "2026-11-22" },
+    { summary: "Run", start: "2026-11-10T06:30", end: "2026-11-10T07:15" },
+  ]);
+  const spec = w.confirms[0]?.spec as { events?: unknown; content?: string } | undefined;
+  expect(spec?.events).toEqual({
+    action: "add",
+    days: [
+      {
+        day: "Tue 10 Nov",
+        events: [
+          { time: "06:30–07:15", title: "Run" },
+          { time: "17:50–19:15", title: "Padel", where: "Bromma Padel", repeats: "Every Sunday" },
+        ],
+      },
+      { day: "Sat 21 – Sun 22 Nov", events: [{ time: "All day", title: "Football cup" }] },
+    ],
+  });
+  expect(spec?.content).toContain("Tue 10 Nov\n    06:30–07:15   Run\n");
+  const plain = started();
+  await create(plain, [PADEL]);
+  expect(plain.confirms[0]?.spec).not.toHaveProperty("events");
 });
 
 // ---- confirm ----
@@ -145,7 +209,7 @@ test("Confirm inserts the events one at a time and lists each with its id and li
   expect(answer).toBe(
     [
       "Created 3 events in the calendar 'Jimmy'.",
-      "1. Tue 10 Nov 17:50–19:15 — Padel (Bromma Padel) — weekly on Sundays — id new1 — https://calendar.example/event?eid=new1",
+      "1. Tue 10 Nov 17:50–19:15 — Padel (Bromma Padel) — every Sunday — id new1 — https://calendar.example/event?eid=new1",
       "2. Sat 21 Nov – Sun 22 Nov all day — Cup — id new2 — https://calendar.example/event?eid=new2",
       "3. Mon 23 Nov all day — Lunch — id new3 — https://calendar.example/event?eid=new3",
     ].join("\n"),
@@ -189,89 +253,6 @@ test("without a confirm card no event is created", async () => {
   delete w.fake.api.confirm;
   expect(await create(w, THREE)).toBe(NO_CONFIRM);
   expect(w.writes()).toEqual([]);
-});
-
-// ---- the editable card ----
-
-test("where prifly has the editable card the rows are editable lines, and a plain card is not shown", async () => {
-  const w = started({ edit: (shown) => shown });
-  const answer = await create(w, THREE);
-  expect(w.confirms.length).toBe(1);
-  const spec = w.confirms[0]?.spec;
-  expect(spec?.summary).toBe("Add 3 events to the calendar 'Jimmy'");
-  expect(spec?.content).toContain(
-    "2026-11-10 17:50-19:15 | Padel | where: Bromma Padel | repeat: RRULE:FREQ=WEEKLY;BYDAY=SU",
-  );
-  expect(spec?.content).toContain("2026-11-21..2026-11-22 all day | Cup");
-  expect(spec?.content).toContain("2026-11-23 all day | Lunch");
-  expect(answer).toStartWith("Created 3 events in the calendar 'Jimmy'.");
-  expect(answer).not.toContain("edited");
-});
-
-test("an edited list is parsed again, created as confirmed, and the answer says so with the final list", async () => {
-  const w = started({
-    edit: (shown) =>
-      shown
-        .replace("2026-11-10 17:50-19:15 | Padel", "2026-11-10 18:00-19:30 | Padel dubbel")
-        .replace("2026-11-23 all day | Lunch", "")
-        .concat("\n2026-12-01 all day | Added by hand | note: Bring cake | zone: Europe/Berlin"),
-  });
-  const answer = await create(w, THREE);
-  expect(answer).toBe(
-    [
-      "Created 3 events in the calendar 'Jimmy'.",
-      "The reader edited the list on the card before confirming, so this is the final list, not the one you sent.",
-      "1. Tue 10 Nov 18:00–19:30 — Padel dubbel (Bromma Padel) — weekly on Sundays — id new1 — https://calendar.example/event?eid=new1",
-      "2. Sat 21 Nov – Sun 22 Nov all day — Cup — id new2 — https://calendar.example/event?eid=new2",
-      "3. Tue 1 Dec all day — Added by hand — id new3 — https://calendar.example/event?eid=new3",
-    ].join("\n"),
-  );
-  expect(stored(w).at(-1)?.["description"]).toBe("Bring cake");
-  expect(stored(w).map((each) => each["summary"])).not.toContain("Lunch");
-});
-
-test("an edit that does not parse creates nothing and names the rows", async () => {
-  const w = started({
-    edit: () =>
-      "2026-11-10 17:50-19:15 | Fine\nsometime soon | Vague\n2026-11-21 all day |\n2026-11-22 all day | X | colour: red",
-  });
-  const answer = await create(w, THREE);
-  expect(answer).toStartWith("Not done: the list the reader edited on the card could not be used");
-  expect(answer).toContain("row 2: cannot read the time 'sometime soon'");
-  expect(answer).toContain("row 3: summary is empty");
-  expect(answer).toContain("row 4: cannot read 'colour: red'");
-  expect(answer).not.toContain("row 1:");
-  expect(w.writes()).toEqual([]);
-});
-
-test("an edit that deletes every line creates nothing", async () => {
-  const w = started({ edit: () => "# nothing left" });
-  expect(await create(w, THREE)).toContain("the list is empty");
-  expect(w.writes()).toEqual([]);
-});
-
-test("Cancel on the editable card answers the cancelled text and writes nothing", async () => {
-  const w = started({ edit: () => null });
-  expect(await create(w, THREE)).toBe(CANCELLED);
-  expect(w.writes()).toEqual([]);
-});
-
-test("the editable text round-trips pipes, line breaks, offsets and recurrence", () => {
-  const events = [
-    {
-      summary: "A | B \\ C",
-      location: "Hall\n2nd floor",
-      description: "x",
-      start: "2026-11-10T22:00:00+01:00",
-      end: "2026-11-11T01:00:00+01:00",
-      recurrence: ["RRULE:FREQ=DAILY;COUNT=3", "EXDATE:20261111"],
-      timeZone: "Europe/Stockholm",
-    },
-    { summary: "Day", date: "2026-11-21", end_date: "2026-11-21" },
-  ];
-  const checked = checkEvents(events);
-  if ("errors" in checked) throw new Error(checked.errors.join());
-  expect(parseEditText(editText(checked.events))).toEqual({ events: checked.events });
 });
 
 // ---- failing part-way ----
@@ -342,14 +323,20 @@ test("one card lists the events and says a recurring event goes as a whole serie
   expect(w.confirms.length).toBe(1);
   expect(w.confirms[0]?.writesBefore).toBe(0);
   const spec = w.confirms[0]?.spec;
-  expect(spec?.summary).toBe("Delete 3 events from the calendar 'Jimmy'");
+  expect(spec?.summary).toBe("Delete 3 events from your calendar 'Jimmy'");
   expect(spec?.content).toBe(
     [
-      "1. Tue 10 Nov 17:50–19:15 — Padel",
-      "2. Thu 12 Nov 07:00–08:00 — Yoga (whole series)",
-      "3. Wed 11 Nov 08:30–09:00 — Dentist",
+      "Tue 10 Nov",
+      "    17:50–19:15   Padel, Bromma Padel",
+      "",
+      "Wed 11 Nov",
+      "    08:30–09:00   Dentist",
+      "",
+      "Thu 12 Nov",
+      "    07:00–08:00   Yoga · weekly: the whole series goes",
     ].join("\n"),
   );
+  expect(spec).not.toHaveProperty("events");
   expect(spec?.details).toContain(
     `DELETE https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(PRIMARY)}/events/series1`,
   );
@@ -363,6 +350,30 @@ test("one card lists the events and says a recurring event goes as a whole serie
   );
   expect(w.writes().map((each) => each.method)).toEqual(["DELETE", "DELETE", "DELETE"]);
   expect(stored(w).map((each) => each["id"])).toEqual(["late1"]);
+});
+
+test("on a prifly with the agenda card the delete card carries the events, with series only on a recurring one", async () => {
+  const w = started({ events: true });
+  stored(w).push({
+    id: "series1",
+    summary: "Yoga",
+    recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+    start: { dateTime: "2026-11-12T07:00:00+01:00" },
+    end: { dateTime: "2026-11-12T08:00:00+01:00" },
+  });
+  await remove(w, ["dentist1", "series1"]);
+  const spec = w.confirms[0]?.spec as { events?: unknown; content?: string } | undefined;
+  expect(spec?.events).toEqual({
+    action: "delete",
+    days: [
+      { day: "Wed 11 Nov", events: [{ time: "08:30–09:00", title: "Dentist" }] },
+      {
+        day: "Thu 12 Nov",
+        events: [{ time: "07:00–08:00", title: "Yoga", repeats: "Every Thursday", series: true }],
+      },
+    ],
+  });
+  expect(spec?.content).toContain("Yoga · every Thursday: the whole series goes");
 });
 
 test("a cancelled delete card deletes nothing", async () => {

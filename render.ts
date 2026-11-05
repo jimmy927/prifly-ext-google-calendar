@@ -18,7 +18,7 @@ function clockSpan(event: CalendarEvent): string {
 }
 
 /** The last day an all-day event covers (its end is the day after). */
-function lastDay(event: CalendarEvent): string {
+export function lastDay(event: CalendarEvent): string {
   const last = event.end === "" ? event.start : addDays(event.end, -1);
   if (last < event.start) return event.start;
   return last;
