@@ -47,7 +47,7 @@ Reads, at once:
 |---|---|
 | `calendar_list` | Every calendar, the subscribed and imported ones (a school's Infomentor calendar) too, hidden ones not: `id \| name \| access role \| colour` |
 | `calendar_events` `{ calendar, from, to, query }` | One calendar's events (`calendar` is an id or a name, default `primary`) from `from` to `to` (`YYYY-MM-DD`, default the next 14 days), recurring events expanded, in start order: date, time or all day, title, place, who and the id of each. `query` filters by text. Up to four pages of 250 events are read |
-| `calendar_agenda` `{ calendars, from, to }` | The events of every calendar, or of `calendars` (ids or names), grouped by day, each line led by its calendar's name; default this week, Monday to Sunday, in the primary calendar's time zone. A calendar that cannot be read is skipped and named |
+| `calendar_agenda` `{ calendars, from, to }` | The events of every calendar, or of `calendars` (ids or names), grouped by day, each line led by its calendar's name (an event in several calendars once, with every name); default this week, Monday to Sunday, in the primary calendar's time zone. A calendar that cannot be read is skipped and named |
 | `calendar_api_docs` `{ method }` | Google's Calendar v3 reference, from its discovery document: every method, or one method's parameters and request and response fields |
 
 Changes, after a confirm card:
