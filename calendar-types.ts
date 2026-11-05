@@ -77,3 +77,31 @@ export function parseEvent(value: unknown): CalendarEvent | null {
     who: who.filter((name) => name !== ""),
   };
 }
+
+/** The calendar a session meant: by id, `primary`, or its name (exactly, else a part of it). */
+export function findCalendar(all: CalendarInfo[], wanted: string): CalendarInfo | null {
+  const asked = wanted.trim().toLowerCase();
+  if (asked === "primary") return all.find((each) => each.primary) ?? null;
+  return (
+    all.find((each) => each.id.toLowerCase() === asked) ??
+    all.find((each) => each.name.toLowerCase() === asked) ??
+    all.find((each) => each.name.toLowerCase().includes(asked)) ??
+    null
+  );
+}
+
+/** One event as `events.get` answers it: the event and whether it belongs to a series. */
+export type EventDetail = {
+  event: CalendarEvent;
+  /** `master` for a series' own id (deleting it deletes the whole series), `occurrence` for one date of it. */
+  series: "" | "master" | "occurrence";
+};
+
+/** An event with its series, or null for one that was cancelled (already deleted). */
+export function parseEventDetail(value: unknown): EventDetail | null {
+  const event = parseEvent(value);
+  if (event === null) return null;
+  const each = isRecord(value) ? value : {};
+  if (list(each["recurrence"]).length > 0) return { event, series: "master" };
+  return { event, series: str(each["recurringEventId"]) === "" ? "" : "occurrence" };
+}

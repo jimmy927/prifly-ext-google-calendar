@@ -22,6 +22,8 @@ test("activate registers the Calendar tools, every one named calendar_*", () => 
     "calendar_events",
     "calendar_agenda",
     "calendar_api",
+    "calendar_create_events",
+    "calendar_delete_events",
     "calendar_api_docs",
     "calendar_sign_in",
   ]);

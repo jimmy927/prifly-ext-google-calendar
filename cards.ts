@@ -29,7 +29,7 @@ async function calendarName(client: CalendarClient, id: string): Promise<string>
 }
 
 /** "Tue 10 Nov 17:50–19:15" from a request body's start and end; "" when it has none. */
-function whenOf(body: unknown): string {
+export function whenOf(body: unknown): string {
   const each = isRecord(body) ? body : {};
   const event = parseEvent({ start: each["start"], end: each["end"] });
   if (event === null || !isDay(datePart(event.start))) return "";

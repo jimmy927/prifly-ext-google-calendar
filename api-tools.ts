@@ -89,7 +89,7 @@ export function apiTool(getApi: () => ExtensionApi | null): ExtensionTool {
   return {
     name: "calendar_api",
     description:
-      "Calls any Google Calendar v3 REST method with the reader's account, for what the other calendar_ tools do not do (creating, changing and deleting events, quickAdd, free/busy, settings, single events…). See calendar_api_docs for the methods. `path` is relative to calendar/v3 (or the full https://www.googleapis.com/calendar/v3/… URL); nothing else is accepted. A GET runs at once; POST, PUT, PATCH and DELETE show the reader a plain-language confirm card first (for an event: what is created, updated or deleted, in which calendar) and run only on Confirm. Answers Google's JSON.",
+      "Calls any Google Calendar v3 REST method with the reader's account, for what the other calendar_ tools do not do (creating, changing and deleting events, quickAdd, free/busy, settings, single events…). For several events at once use calendar_create_events or calendar_delete_events (one card, not one per event). See calendar_api_docs for the methods. `path` is relative to calendar/v3 (or the full https://www.googleapis.com/calendar/v3/… URL); nothing else is accepted. A GET runs at once; POST, PUT, PATCH and DELETE show the reader a plain-language confirm card first (for an event: what is created, updated or deleted, in which calendar) and run only on Confirm. Answers Google's JSON.",
     inputSchema: schema(
       {
         method: { type: "string", description: "GET (default), POST, PUT, PATCH or DELETE." },

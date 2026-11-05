@@ -2,14 +2,16 @@
  * Every MCP tool the extension serves, as `mcp__prifly__calendar_*`, and the
  * ones that only read: the reader's calendars, one calendar's events and the
  * agenda across calendars. Reads run at once; `calendar_api` (`api-tools.ts`)
- * waits for the reader's confirm before it changes anything. A failure comes
+ * and the bulk tools (`bulk-tools.ts`) wait for the reader's confirm before
+ * they change anything. A failure comes
  * back as text, not as a throw.
  */
 
 import type { ExtensionApi, ExtensionTool } from "@prifly/extension-api";
 import { type ApiToolsOptions, apiDocsTool, apiTool } from "./api-tools";
+import { createEventsTool, deleteEventsTool } from "./bulk-tools";
 import { type CalendarClient, failureText } from "./calendar";
-import type { CalendarInfo } from "./calendar-types";
+import { type CalendarInfo, findCalendar } from "./calendar-types";
 import {
   addDays,
   dayLabel,
@@ -47,18 +49,6 @@ function listTool(getApi: () => ExtensionApi | null): ExtensionTool {
         return got.value.length === 0 ? "No calendars." : got.value.map(calendarLine).join("\n");
       }),
   };
-}
-
-/** The calendar a session meant: by id, `primary`, or its name (exactly, else a part of it). */
-export function findCalendar(all: CalendarInfo[], wanted: string): CalendarInfo | null {
-  const asked = wanted.trim().toLowerCase();
-  if (asked === "primary") return all.find((each) => each.primary) ?? null;
-  return (
-    all.find((each) => each.id.toLowerCase() === asked) ??
-    all.find((each) => each.name.toLowerCase() === asked) ??
-    all.find((each) => each.name.toLowerCase().includes(asked)) ??
-    null
-  );
 }
 
 type Range = { from: string; to: string };
@@ -228,6 +218,8 @@ export function calendarTools(
     eventsTool(getApi, now),
     agendaTool(getApi, now),
     apiTool(getApi),
+    createEventsTool(getApi),
+    deleteEventsTool(getApi),
     apiDocsTool(options),
     signInTool(getApi, options.onSignedIn),
   ];

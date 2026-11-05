@@ -146,6 +146,10 @@ export type FakeCalendar = {
   forbidden: Set<string>;
   /** While set, every call answers 403 as a grant without the scope does. */
   noScope: { on: boolean };
+  /** The insert (counted from 1, over the whole test) that answers 500; 0 for none. */
+  failInsertAt: { n: number };
+  /** The ids of events whose delete answers 500. */
+  failDelete: Set<string>;
 };
 
 const instant = (value: Json | undefined): number =>
@@ -178,7 +182,10 @@ export function fakeCalendar(): FakeCalendar {
   const pageSize = { value: 2 };
   const forbidden = new Set<string>();
   const noScope = { on: false };
+  const failInsertAt = { n: 0 };
+  const failDelete = new Set<string>();
   let created = 0;
+  let inserts = 0;
 
   const provider: FakeProvider = async (request) => {
     const url = new URL(request.url);
@@ -220,13 +227,20 @@ export function fakeCalendar(): FakeCalendar {
       eventLists.push(url);
       return listEvents(stored, url, pageSize.value);
     }
-    if (parts.length === 3 && request.method === "POST") {
-      const body = (await request.json()) as Json;
-      const event = { ...body, id: `new${++created}` };
-      stored.push(event);
-      return Response.json(event);
-    }
+    if (parts.length === 3 && request.method === "POST") return await onInsert(request, stored);
     return await onEvent(request, stored, parts[3] ?? "");
+  };
+
+  /** An insert: the body stored under a new id and link, unless this is the insert that fails. */
+  const onInsert = async (request: Request, stored: Json[]): Promise<Response> => {
+    const body = (await request.json()) as Json;
+    if (++inserts === failInsertAt.n) {
+      return Response.json({ error: { code: 500, message: "Backend Error" } }, { status: 500 });
+    }
+    const id = `new${++created}`;
+    const event = { ...body, id, htmlLink: `https://calendar.example/event?eid=${id}` };
+    stored.push(event);
+    return Response.json(event);
   };
 
   /** One event: get, delete, and update (PUT and PATCH alike, merging the body in). */
@@ -235,6 +249,7 @@ export function fakeCalendar(): FakeCalendar {
     if (found === undefined) return new Response("no event", { status: 404 });
     if (request.method === "GET") return Response.json(found);
     if (request.method === "DELETE") {
+      if (failDelete.has(id)) return new Response("backend error", { status: 500 });
       stored.splice(stored.indexOf(found), 1);
       return new Response(null, { status: 204 });
     }
@@ -242,5 +257,15 @@ export function fakeCalendar(): FakeCalendar {
     return Response.json(found);
   };
 
-  return { provider, events, eventLists, calendarLists, pageSize, forbidden, noScope };
+  return {
+    provider,
+    events,
+    eventLists,
+    calendarLists,
+    pageSize,
+    forbidden,
+    noScope,
+    failInsertAt,
+    failDelete,
+  };
 }

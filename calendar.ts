@@ -3,17 +3,19 @@
  * adds the token, so none is kept here. Every method answers a value or a
  * typed failure (the grant ended, or Google answered an error status) and
  * never throws for those. `request` with a method other than GET is only
- * called by `calendar_api` after the reader confirmed.
+ * called after the reader confirmed (`calendar_api`, the bulk tools).
  */
 
 import type { ExtensionConnectionsApi } from "@prifly/extension-api";
 import {
   type CalendarEvent,
   type CalendarInfo,
+  type EventDetail,
   isRecord,
   list,
   parseCalendar,
   parseEvent,
+  parseEventDetail,
   str,
 } from "./calendar-types";
 import { httpText, signInText } from "./connection";
@@ -55,6 +57,8 @@ export type CalendarClient = {
   events(calendarId: string, query: EventsQuery): Promise<CalendarResult<EventsFound>>;
   /** One event's title, for a card; "" when it cannot be read. */
   eventTitle(calendarId: string, eventId: string): Promise<string>;
+  /** One event with its series; null when it was cancelled. A missing event is an `http` failure with status 404. */
+  event(calendarId: string, eventId: string): Promise<CalendarResult<EventDetail | null>>;
   /** Any call below calendar/v3: `path` starts with "/" and may carry a query. Answers the body as text. */
   request(method: string, path: string, body?: unknown): Promise<CalendarResult<string>>;
 };
@@ -163,6 +167,12 @@ export function calendarClient(options: CalendarClientOptions): CalendarClient {
       const path = `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
       const got = await json(path);
       return got.ok ? str(got.value["summary"]) : "";
+    },
+
+    async event(calendarId, eventId) {
+      const path = `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+      const got = await json(path);
+      return got.ok ? { ok: true, value: parseEventDetail(got.value) } : got;
     },
 
     async request(method, path, payload) {

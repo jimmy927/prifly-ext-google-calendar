@@ -57,14 +57,19 @@ export function localZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
-/** `zone` if it is a time zone this runtime knows, else the local one. */
-export function knownZone(zone: string): string {
+/** Whether this runtime knows `zone` as a time zone name. */
+export function isZone(zone: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });
-    return zone;
+    return true;
   } catch {
-    return localZone();
+    return false;
   }
+}
+
+/** `zone` if it is a time zone this runtime knows, else the local one. */
+export function knownZone(zone: string): string {
+  return isZone(zone) ? zone : localZone();
 }
 
 /** Today's date on `zone`'s clock. */
