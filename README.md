@@ -8,6 +8,10 @@ event 'Padel' on Tue 10 Nov 17:50–19:15 in calendar 'Jimmy'") with the exact
 request under it, and only happens when you confirm. Cancel, and the tool
 answers "Not done: you cancelled" and nothing is written.
 
+![The confirm card for adding four events to a calendar, an agenda grouped by day](docs/screenshot.png)
+
+The confirm card for adding events, in prifly. The events are invented.
+
 There is no UI besides that: no launcher, no chips. Settings → Extensions
 shows one status line, read at start and every 15 minutes: "Connected as
 ada@example.com · 4 calendars", or what is wrong with the sign-in.
